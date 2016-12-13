@@ -1,16 +1,14 @@
 import numpy as np
 import tensorflow as tf
 
-import matplotlib.pyplot as plt
-
 np.random.seed(0)
 tf.set_random_seed(0)
 
-def xavier_init(fan_in, fan_out, constant = 1.0):
+def xavier_init(fan_in, fan_out, constant = 1):
 	""" Xavier initialization of network weights"""
 	# https://stackoverflow.com/questions/33640581/how-to-do-xavier-initialization-on-tensorflow
-	low = -constant*np.sqrt(6.0*(fan_in + fan_out))
-	high = constant*np.sqrt(6.0*(fan_in + fan_out))
+	low = -constant*np.sqrt(6.0/(fan_in + fan_out))
+	high = constant*np.sqrt(6.0/(fan_in + fan_out))
 	return tf.random_uniform((fan_in, fan_out),
 							minval=low, maxval=high,
 							dtype=tf.float32)
@@ -43,7 +41,7 @@ class VariationalAutoencoder(object):
         init = tf.initialize_all_variables()
 
         # Launch the session
-        self.sess = tf.InteractiveSession()
+        self.sess = tf.Session()
         self.sess.run(init)
 
     def _create_network(self):
@@ -124,7 +122,7 @@ class VariationalAutoencoder(object):
             tf.nn.sigmoid(tf.add(tf.matmul(layer_2, weights['out_mean']), 
                                  biases['out_mean']))
         return x_reconstr_mean
-            
+
     def _create_loss_optimizer(self):
         # The loss is composed of two terms:
         # 1.) The reconstruction loss (the negative log probability
@@ -138,6 +136,7 @@ class VariationalAutoencoder(object):
             -tf.reduce_sum(self.x * tf.log(1e-10 + self.x_reconstr_mean)
                            + (1-self.x) * tf.log(1e-10 + 1 - self.x_reconstr_mean),
                            1)
+
         # 2.) The latent loss, which is defined as the Kullback Leibler divergence 
         ##    between the distribution in latent space induced by the encoder on 
         #     the data and some prior. This acts as a kind of regularizer.
@@ -151,6 +150,11 @@ class VariationalAutoencoder(object):
         # Use ADAM optimizer
         self.optimizer = \
             tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.cost)
+
+    def save_model(self, path, name = 'vae_model'):
+        saver = tf.train.Saver()
+        save_path = saver.save(self.sess, path + '/' + name + '.ckpt')
+        print("Model saved in file: %s" % save_path)
 
     def partial_fit(self, X):
         """Train model based on mini-batch of input data.
@@ -172,6 +176,7 @@ class VariationalAutoencoder(object):
         generated. Otherwise, z_mu is drawn from prior in latent 
         space.        
         """
+
         if z_mu is None:
             z_mu = np.random.normal(size=self.network_architecture["n_z"])
         # Note: This maps to mean of distribution, we could alternatively
@@ -183,3 +188,5 @@ class VariationalAutoencoder(object):
         """ Use VAE to reconstruct given data. """
         return self.sess.run(self.x_reconstr_mean, 
                              feed_dict={self.x: X})
+
+
